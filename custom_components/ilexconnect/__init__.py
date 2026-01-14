@@ -1,84 +1,93 @@
+import logging
 import aiohttp
+import async_timeout
 
-from asyncio import gather
-from async_timeout import timeout
-from http import HTTPStatus
-from homeassistant.const import CONF_USERNAME, CONF_PASSWORD, Platform
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant import config_entries, core
+from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .ilexconnect import ILexConnectApi
-from .const import API_TIMEOUT, DOMAIN, UPDATE_INTERVAL, LOGGER, API_SRN
+from .const import DOMAIN, DEFAULT_UPDATE_INTERVAL
 
-PLATFORMS = [Platform.SENSOR]
+_LOGGER = logging.getLogger(__name__)
 
+API_URL = "https://i-lexconnect.com/api/devices/{device_id}/live"
+AUTH_URL = "https://i-lexconnect.com/login"
 
-async def async_setup_entry(hass, config_entry):
-    """Set up Awair integration from a config entry."""
-    session = async_get_clientsession(hass)
-    username = config_entry.data[CONF_USERNAME]
-    password = config_entry.data[CONF_PASSWORD]
-    api = ILexConnectApi(hass, username, password, session=session)
-    try:
-        await api.login()
-    except aiohttp.ClientResponseError as loginex:
-        if loginex.status == HTTPStatus.FORBIDDEN:
-            raise ConfigEntryAuthFailed from loginex
-    coordinator = ILexDataUpdateCoordinator(hass, api, config_entry)
+class IlexConnectApiClient:
+    """API client for I-LexConnect."""
 
-    await coordinator.async_config_entry_first_refresh()
+    def __init__(self, hass: core.HomeAssistant, username: str, password: str, device_id: str):
+        self._session = aiohttp_client.async_get_clientsession(hass)
+        self.username = username
+        self.password = password
+        self.device_id = device_id
+        self.token = None
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][config_entry.entry_id] = coordinator
+    async def authenticate(self):
+        """Authenticate with the I-LexConnect server."""
+        try:
+            async with async_timeout.timeout(10):
+                response = await self._session.post(
+                    AUTH_URL,
+                    json={"username": self.username, "password": self.password},
+                )
+                data = await response.json()
+                if response.status == 200:
+                    self.token = data.get("token")
+                    _LOGGER.info("Authenticated with I-LexConnect API")
+                else:
+                    raise UpdateFailed("Authentication failed")
+        except Exception as e:
+            _LOGGER.error("Authentication error: %s", e)
+            raise UpdateFailed("Authentication error")
 
-    hass.config_entries.async_setup_platforms(config_entry, PLATFORMS)
+    async def get_device_data(self):
+        """Fetch live data from the water softener."""
+        if not self.token:
+            await self.authenticate()
 
-    return True
+        headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        url = API_URL.format(device_id=self.device_id)
 
+        try:
+            async with async_timeout.timeout(10):
+                response = await self._session.get(url, headers=headers)
+                if response.status != 200:
+                    raise UpdateFailed(f"Failed to retrieve device data: {response.status}")
+                return await response.json()
+        except Exception as e:
+            _LOGGER.error("Error fetching device data: %s", e)
+            raise UpdateFailed("Error fetching device data")
 
-async def async_unload_entry(hass, config_entry):
-    """Unload Awair configuration."""
-    unload_ok = await hass.config_entries.async_unload_platforms(
-        config_entry, PLATFORMS
+async def async_setup_entry(hass: core.HomeAssistant, entry: config_entries.ConfigEntry):
+    """Set up I-LexConnect from a config entry."""
+    username = entry.data["username"]
+    password = entry.data["password"]
+    device_id = entry.data["device_id"]
+    update_interval = entry.options.get("update_interval", DEFAULT_UPDATE_INTERVAL)
+
+    api_client = IlexConnectApiClient(hass, username, password, device_id)
+
+    async def async_update_data():
+        return await api_client.get_device_data()
+
+    coordinator = DataUpdateCoordinator(
+        hass,
+        _LOGGER,
+        name=DOMAIN,
+        update_method=async_update_data,
+        update_interval=update_interval,
     )
 
-    if unload_ok:
-        hass.data[DOMAIN].pop(config_entry.entry_id)
+    await coordinator.async_refresh()
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    return unload_ok
+    # Forward setup to sensor platform
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    return True
 
-
-class ILexDataUpdateCoordinator(DataUpdateCoordinator):
-
-    def __init__(self, hass, api, config_entry):
-        self._api = api
-        self._config_entry = config_entry
-        super().__init__(hass, LOGGER, name=DOMAIN, update_interval=UPDATE_INTERVAL)
-
-    async def _async_update_data(self):
-        async with timeout(API_TIMEOUT):
-            try:
-                LOGGER.debug("Fetching devices")
-                devices = await self._api.get_devices(filterproducent="oceanic", filterdevicetype="Smart")
-                LOGGER.debug(devices)
-                await gather(
-                    *(self._api.set_cmd(device["serial"], {"command": "setRCE", "deviceid": device["serial"], "value": device["enduser_extend"]["id"]}) for device in devices["results"])
-                )
-                results = await gather(
-                    *(self._api.get_live(device["serial"]) for device in devices["results"])
-                )
-                LOGGER.debug(results)
-                return {result[API_SRN]: result for result in results if API_SRN in result}
-            except aiohttp.ClientResponseError as ex:
-                if ex.status == HTTPStatus.UNAUTHORIZED:
-                    LOGGER.debug("Failed to fetch data due to login expired. Logging in...")
-                    try:
-                        await self._api.login()
-                    except aiohttp.ClientResponseError as loginex:
-                        if loginex.status == HTTPStatus.FORBIDDEN:
-                            raise ConfigEntryAuthFailed from loginex
-                        raise UpdateFailed(loginex) from loginex
-                raise UpdateFailed(ex) from ex
-            except Exception as err:
-                raise UpdateFailed(err) from err
+async def async_unload_entry(hass: core.HomeAssistant, entry: config_entries.ConfigEntry):
+    """Unload a config entry."""
+    await hass.config_entries.async_forward_entry_unload(entry, ["sensor"])
+    hass.data[DOMAIN].pop(entry.entry_id)
+    return True

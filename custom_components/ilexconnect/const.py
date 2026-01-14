@@ -1,76 +1,35 @@
-import logging
 from datetime import timedelta
 
-from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    SensorEntityDescription,
-    SensorStateClass,
-)
-from homeassistant.helpers.entity import EntityCategory
-from homeassistant.const import (PERCENTAGE, VOLUME_LITERS)
-
 DOMAIN = "ilexconnect"
+DEFAULT_UPDATE_INTERVAL = timedelta(seconds=60)
 
-UPDATE_INTERVAL = timedelta(minutes=5)
-API_TIMEOUT = 20
+# Meta data keys to keep
+META_KEYS = ["dtype", "firmware", "status", "getDAT", "getMAC", "getSRN"]
 
-LOGGER = logging.getLogger(__package__)
-
-API_CS1    = "getCS1"            # water reserve percent
-API_RES    = "getRES"            # water reserve in liter
-API_IWH    = "getIWH"            # inkomende waterhardheid (fH graden)
-API_OWH    = "getOWH"            # uitgaande waterhardheid (fH graden)
-API_SD1    = "getSD1"            # zout reserve in dagen
-API_TOR    = "getTOR"            # totaal aantal regeneraties
-API_MAC    = "getMAC"            # MAC address
-API_FW     = "firmware"          # firmware type
-API_VER    = "getVER"            # firmware version
-API_DTYPE  = "dtype"             # device type
-API_STATUS = "status"            # online status
-API_SRN    = "getSRN"            # serial number
-API_DATE   = "getDATasTimestamp" # date of live data
-
-UNIT_WATERHARDHEID = "fH°"
-
-SENSOR_TYPES = (
-    SensorEntityDescription(
-        key=API_CS1,
-        native_unit_of_measurement=PERCENTAGE,
-        name="Water reserve",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key=API_RES,
-        native_unit_of_measurement=VOLUME_LITERS,
-        name="Water reserve volume",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key=API_IWH,
-        native_unit_of_measurement=UNIT_WATERHARDHEID,
-        name="Inkomende waterhardheid",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key=API_OWH,
-        native_unit_of_measurement=UNIT_WATERHARDHEID,
-        name="Uitgaande waterhardheid",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key=API_SD1,
-        name="Zout reserve",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key=API_TOR,
-        name="Aantal regeneraties",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key=API_DATE,
-        name="last update",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        device_class=SensorDeviceClass.TIMESTAMP,
-    ),
-)
+# Main sensors
+SENSOR_KEYS = {
+    "getFLO": ("Water Flow", "L/min"),
+    "getSV1": ("Salt Content", "kg"),
+    "getCS1": ("Water Reserve", "%"),
+    "getNOR": ("Normal Regenerations", None),
+    "getSRE": ("Service Regenerations", None),
+    "getINR": ("Incomplete Regenerations", None),
+    "getTOR": ("Total Regenerations", None),
+    "getTCG_total": ("Today's Water Usage", "L"),
+    "getTCG": ("Hourly Usage Today", "L"),
+    "getYCG_total": ("Yesterday's Water Usage", "L"),
+    "getYCG": ("Hourly Usage Yesterday", "L"),
+    "getMCG_total": ("Yearly Water Usage", "m3"),
+    "getMCG": ("Monthly Water Usage", "m3"),
+    "getRCG_total": ("Lifetime Water Usage", "m3"),
+    "getRCG": ("Yearly Water Usage Breakdown", "m3"),
+    "getSCG_total": ("Salt Usage Total", "kg"),
+    "getSCG": ("Salt Usage Monthly", "kg"),
+    "getRDO": ("Salt Dose", "g/L"),
+    "getMPR": ("Water Pressure", "bar"),
+    "getWCG_total": ("Current Week Usage", "L"),
+    "getWCG": ("Current Week Daily Usage", "L"),
+    "getLCG_total": ("Previous Week Usage", "L"),
+    "getLCG": ("Previous Week Daily Usage", "L"),
+    "getPRS": ("Water Pressure", "bar"),
+}   
