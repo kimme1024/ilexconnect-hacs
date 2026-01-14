@@ -66,3 +66,7 @@ This integration is not affiliated with SYR or I-LexConnect.
 This integration was developed with the assistance of AI tools.
 I will do my best to maintain and support it, but please note that
 support may be limited and community contributions are welcome.
+
+## Support
+
+Feel free to buy me a coffee: https://buymeacoffee.com/kimheymans
