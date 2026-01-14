@@ -1,4 +1,7 @@
 {
-  "name": "ilexconnect",
-  "domains": ["sensor"]
+  "name": "I-LexConnect",
+  "content_in_root": false,
+  "domain": "ilexconnect",
+  "render_readme": true,
+  "homeassistant": "2023.8.0"
 }
