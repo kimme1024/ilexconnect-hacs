@@ -1,7 +1,8 @@
 {
   "name": "I-LexConnect",
   "content_in_root": false,
-  "domain": "ilexconnect",
-  "render_readme": true,
-  "homeassistant": "2023.8.0"
+  "homeassistant": "2023.8.0",
+  "zip_release": false,
+  "filename": "custom_components/ilexconnect/manifest.json",
+  "version": "v2.0.0"
 }
