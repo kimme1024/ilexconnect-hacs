@@ -1,6 +1,7 @@
 import logging
 import aiohttp
 import async_timeout
+from datetime import timedelta
 
 from homeassistant import config_entries, core
 from homeassistant.helpers import aiohttp_client
@@ -64,7 +65,10 @@ async def async_setup_entry(hass: core.HomeAssistant, entry: config_entries.Conf
     username = entry.data["username"]
     password = entry.data["password"]
     device_id = entry.data["device_id"]
-    update_interval = entry.options.get("update_interval", DEFAULT_UPDATE_INTERVAL)
+
+    # Convert update interval from config entry options (seconds) to timedelta
+    update_interval_seconds = entry.options.get("update_interval", int(DEFAULT_UPDATE_INTERVAL.total_seconds()))
+    update_interval = timedelta(seconds=update_interval_seconds)
 
     api_client = IlexConnectApiClient(hass, username, password, device_id)
 
