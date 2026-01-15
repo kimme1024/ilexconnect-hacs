@@ -52,7 +52,7 @@ Configured via UI (Settings → Devices & Services).
 | Current Week Usage | L | Water usage for this week |
 | Previous Week Usage | L | Water usage for last week |
 | Yearly Water Usage | m³ | Water usage this year |
-| Lifetime Water Usage | m³ | Total water usage since installation, usable in Energy Dashboard ✅ |
+| Lifetime Water Usage | L | Total water usage since installation, usable in Energy Dashboard ✅ |
 | Salt Usage Total | kg | Total salt used |
 | Monthly Water Usage | m³ | Water usage per month |
 | Salt Usage Monthly | kg | Salt used per month |

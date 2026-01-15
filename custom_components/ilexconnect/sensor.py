@@ -45,67 +45,53 @@ class IlexSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, key, name, unit):
         super().__init__(coordinator)
         self._key = key
-        self._name = name
-        self._unit = unit
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def unique_id(self):
-        # Terug naar het originele ID formaat voor een schone installatie
-        return f"ilexconnect_{self._key}"
-
-    @property
-    def native_unit_of_measurement(self):
-        # Forceer de correcte eenheid voor het Energy Dashboard
-        if self._key == "getRCG_total":
-            return "m³"
-        return self._unit
+        self._attr_name = name
+        self._attr_native_unit_of_measurement = unit
+        self._attr_unique_id = f"{DOMAIN}_{key}"
 
     @property
     def native_value(self):
         data = self.coordinator.data
-        if not data:
+        if not data or self._key not in data:
             return None
             
         value = data.get(self._key)
-        if value is None:
-            return None
 
-        # Verwerking van tijdstempel sensoren
+        # 1. Tijdstempel verwerking
         if self._key in ["getDAT", "date"]:
             try:
                 return datetime.utcfromtimestamp(int(value))
             except (ValueError, TypeError):
                 return value
 
-        # Zorg dat alle numerieke waarden als float worden doorgegeven
+        # 2. Numerieke verwerking & Conversie van m3 naar Liter
         try:
-            return float(value)
+            float_value = float(value)
+            
+            # De SYR API levert deze keys in m3, we rekenen ze hier om naar L
+            if self._key in ["getRCG_total", "getMCG_total", "getMCG", "getRCG"]:
+                return round(float_value * 1000, 1)
+                
+            return float_value
         except (ValueError, TypeError):
             return value
 
     @property
-    def suggested_display_precision(self):
-        # Toon 3 decimalen voor de watermeter (liternauwkeurigheid)
-        if self._key == "getRCG_total":
-            return 3
-        return None
-
-    @property
     def device_class(self):
-        # De 'water' klasse is essentieel voor herkenning in het Energy Dashboard
-        if self._key == "getRCG_total":
+        if self._key in ["getRCG_total", "getMCG_total", "getTCG_total", "getWCG_total"]:
             return SensorDeviceClass.WATER
         return None
 
     @property
     def state_class(self):
-        # 'total_increasing' geeft aan dat dit een cumulatieve teller is
-        if self._key == "getRCG_total":
+        if self._key in ["getRCG_total", "getMCG_total", "getTCG_total", "getWCG_total"]:
             return SensorStateClass.TOTAL_INCREASING
+        return None
+
+    @property
+    def suggested_display_precision(self):
+        if self.native_unit_of_measurement == "L":
+            return 1
         return None
 
     @property
