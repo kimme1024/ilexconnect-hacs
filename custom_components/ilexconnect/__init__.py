@@ -1,5 +1,4 @@
 import logging
-import aiohttp
 import async_timeout
 from datetime import timedelta
 
@@ -37,10 +36,10 @@ class IlexConnectApiClient:
                     self.token = data.get("token")
                     _LOGGER.info("Authenticated with I-LexConnect API")
                 else:
-                    raise UpdateFailed("Authentication failed")
+                    raise UpdateFailed(f"Authentication failed: {response.status}")
         except Exception as e:
             _LOGGER.error("Authentication error: %s", e)
-            raise UpdateFailed("Authentication error")
+            raise UpdateFailed(f"Authentication error: {e}")
 
     async def get_device_data(self):
         """Fetch live data from the water softener."""
@@ -53,24 +52,26 @@ class IlexConnectApiClient:
         try:
             async with async_timeout.timeout(10):
                 response = await self._session.get(url, headers=headers)
+                if response.status == 401:  # Token expired
+                    await self.authenticate()
+                    headers = {"Authorization": f"Bearer {self.token}"}
+                    response = await self._session.get(url, headers=headers)
+                
                 if response.status != 200:
                     raise UpdateFailed(f"Failed to retrieve device data: {response.status}")
                 return await response.json()
         except Exception as e:
             _LOGGER.error("Error fetching device data: %s", e)
-            raise UpdateFailed("Error fetching device data")
+            raise UpdateFailed(f"Error fetching device data: {e}")
 
 async def async_setup_entry(hass: core.HomeAssistant, entry: config_entries.ConfigEntry):
     """Set up I-LexConnect from a config entry."""
-    username = entry.data["username"]
-    password = entry.data["password"]
-    device_id = entry.data["device_id"]
-
-    # Convert update interval from config entry options (seconds) to timedelta
-    update_interval_seconds = entry.options.get("update_interval", int(DEFAULT_UPDATE_INTERVAL.total_seconds()))
-    update_interval = timedelta(seconds=update_interval_seconds)
-
-    api_client = IlexConnectApiClient(hass, username, password, device_id)
+    # Haal polling interval op (altijd omzetten naar int voor de zekerheid)
+    interval_seconds = int(entry.options.get("update_interval", DEFAULT_UPDATE_INTERVAL.total_seconds()))
+    
+    api_client = IlexConnectApiClient(
+        hass, entry.data["username"], entry.data["password"], entry.data["device_id"]
+    )
 
     async def async_update_data():
         return await api_client.get_device_data()
@@ -80,18 +81,26 @@ async def async_setup_entry(hass: core.HomeAssistant, entry: config_entries.Conf
         _LOGGER,
         name=DOMAIN,
         update_method=async_update_data,
-        update_interval=update_interval,
+        update_interval=timedelta(seconds=interval_seconds),
     )
 
     await coordinator.async_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # Forward setup to sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    
+    # Registreer de listener voor wijzigingen in opties
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+
     return True
 
 async def async_unload_entry(hass: core.HomeAssistant, entry: config_entries.ConfigEntry):
     """Unload a config entry."""
-    await hass.config_entries.async_forward_entry_unload(entry, ["sensor"])
-    hass.data[DOMAIN].pop(entry.entry_id)
-    return True
+    unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+    return unload_ok
+
+async def update_listener(hass: core.HomeAssistant, entry: config_entries.ConfigEntry):
+    """Handle options update."""
+    await hass.config_entries.async_reload(entry.entry_id)

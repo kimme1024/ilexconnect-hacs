@@ -1,10 +1,11 @@
 {
   "domain": "ilexconnect",
   "name": "I-LexConnect Water Softener",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "documentation": "https://github.com/kimme1024/ilexconnect-hacs",
   "issue_tracker": "https://github.com/kimme1024/ilexconnect-hacs/issues",
-  "codeowners": ["kimme1024"],
+  "codeowners": ["@kimme1024"],
   "config_flow": true,
-  "iot_class": "cloud_polling"
+  "iot_class": "cloud_polling",
+  "requirements": ["aiohttp", "async_timeout"]
 }
